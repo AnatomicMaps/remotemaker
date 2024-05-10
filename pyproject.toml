@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "remotemaker"
-version = "0.1.1"
+version = "0.1.2"
 description = ""
 authors = ["David Brooks <d.brooks@auckland.ac.nz>"]
 

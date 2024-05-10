@@ -35,7 +35,7 @@ from . import __version__
 
 #===============================================================================
 
-REMOTE_TIMEOUT = (5, 2)     # (connection, read) timeout in seconds
+REMOTE_TIMEOUT = (5, 10)     # (connection, read) timeout in seconds
 
 LOG_ENDPOINT  = 'make/log'
 MAKE_ENDPOINT = 'make/map'
