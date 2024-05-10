@@ -19,10 +19,8 @@
 #===============================================================================
 
 import argparse
-from enum import Enum
 import json
 import logging
-from pprint import pformat
 import sys
 from time import sleep
 from typing import Optional
@@ -39,13 +37,19 @@ from __init__ import __version__
 
 REMOTE_TIMEOUT = (5, 2)     # (connection, read) timeout in seconds
 
+LOG_ENDPOINT  = 'make/log'
+MAKE_ENDPOINT = 'make/map'
+
+QUEUED_POLL_TIME  = 20
+RUNNING_POLL_TIME = 10
+
 #===============================================================================
 
-class MakerStatus(Enum):
-    QUEUED = 'queued',
-    RUNNING = 'running',
-    TERMINATED = 'terminated',
-    ABORTED = 'aborted',
+class MakerStatus:
+    QUEUED = 'queued'
+    RUNNING = 'running'
+    TERMINATED = 'terminated'
+    ABORTED = 'aborted'
     UNKNOWN = 'unknown'
 
 INITIAL_STATUS = [
@@ -74,26 +78,25 @@ class RemoteMaker:
         }
         if commit is not None:
             remote_map['commit'] = commit
-        response = self.__request('make/map', remote_map)
-        logging.info(f'Request: {pformat(response)}')
+        response = self.__request(MAKE_ENDPOINT, remote_map)
+        logging.info(f'Request: {str(response)}')
         self.__status = response['status']
         if self.__status not in INITIAL_STATUS:
             raise IOError('Unexpected initial status')
         self.__process = response['process']
         self.__last_log_line = 0
-        self.__poll_time = 10 if response['status'] == MakerStatus.QUEUED else 5
+        self.__poll_time = QUEUED_POLL_TIME if response['status'] == MakerStatus.QUEUED else RUNNING_POLL_TIME
 
     def __request(self, endpoint: str, data: Optional[dict]=None):
     #=============================================================
         server_endpoint = f'{self.__server}/{endpoint}'
         headers = {
-            'Content-Type': 'application/json',
             'Authorization': f'Bearer {self.__token}'
         }
         if data is None:
             response = requests.get(server_endpoint, headers=headers, timeout=REMOTE_TIMEOUT)
         else:
-            response = requests.post(server_endpoint, headers=headers, data=data, timeout=REMOTE_TIMEOUT)
+            response = requests.post(server_endpoint, headers=headers, json=data, timeout=REMOTE_TIMEOUT)
         response.raise_for_status()
         try:
             return response.json()
@@ -102,18 +105,16 @@ class RemoteMaker:
 
     def __check_and_print_log(self):
     #===============================
-        response = self.__request(f'log/{self.__process}/{self.__last_log_line+1}')
+        response = self.__request(f'{LOG_ENDPOINT}/{self.__process}/{self.__last_log_line+1}')
         self.__status = response['status']
         log_data = response.get('log', '')
-        if self.__status == MakerStatus.QUEUED:
-            logging.info(f'Queued: {pformat(response)}')
-        else:
-            self.__poll_time = 5
+        if self.__status != MakerStatus.QUEUED:
+            self.__poll_time = RUNNING_POLL_TIME
         if log_data != '':
-            print(log_data)
+            print(log_data.strip())
             self.__last_log_line += len(log_data.split('\n'))
         if self.__status == MakerStatus.UNKNOWN:
-            logging.info(f'Unknown: {pformat(response)}')
+            logging.info(f'Unknown: {str(response)}')
             raise IOError('Unexpected response')
 
     def run(self):
@@ -122,7 +123,7 @@ class RemoteMaker:
             self.__check_and_print_log()
             sleep(self.__poll_time)
         # Delete process record on server
-        self.__request(f'log/{self.__process}/{self.__last_log_line+1}')
+        self.__request(f'{LOG_ENDPOINT}/{self.__process}/{self.__last_log_line+1}')
         return self.__status == MakerStatus.TERMINATED
 
 #===============================================================================
@@ -147,7 +148,7 @@ def parse_args():
 
 def configure_log():
 #===================
-    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s')
+    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', level=logging.INFO)
 
 def main():
 #==========
