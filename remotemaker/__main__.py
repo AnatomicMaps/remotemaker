@@ -44,8 +44,8 @@ REMOTE_TIMEOUT = (10, 30)     # (connection, read) timeout in seconds
 LOG_ENDPOINT  = 'make/log'
 MAKE_ENDPOINT = 'make/map'
 
-QUEUED_POLL_TIME  = 20
-RUNNING_POLL_TIME = 10
+QUEUED_POLL_TIME  = 10
+RUNNING_POLL_TIME = 3
 
 #===============================================================================
 
