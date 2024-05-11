@@ -19,6 +19,7 @@
 #===============================================================================
 
 import argparse
+from http.client import HTTPConnection
 import json
 import logging
 import sys
@@ -94,9 +95,12 @@ class RemoteMaker:
             'Authorization': f'Bearer {self.__token}'
         }
         if data is None:
+            logging.debug(f'REQ: {server_endpoint}')
             response = requests.get(server_endpoint, headers=headers, timeout=REMOTE_TIMEOUT)
         else:
+            logging.debug(f'REQ: {server_endpoint} {str(data)}')
             response = requests.post(server_endpoint, headers=headers, json=data, timeout=REMOTE_TIMEOUT)
+        logging.debug(f'RSP: {response.status_code} {response.text}')
         response.raise_for_status()
         try:
             return response.json()
@@ -133,6 +137,8 @@ def parse_args():
 #================
     parser = argparse.ArgumentParser(description='Make a flatmap on a remote map server.')
     parser.add_argument('-v', '--version', action='version', version=__version__)
+    parser.add_argument('--debug', action='store_true',
+                        help='Trace requests to remote server')
     server = parser.add_argument_group('Remote server')
     server.add_argument('--server', required=True,
                         help='The URL of flatmap server')
@@ -147,14 +153,20 @@ def parse_args():
                         help='The branch/tag/commit to use')
     return parser.parse_args()
 
-def configure_log():
-#===================
-    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', level=logging.INFO)
+def configure_log(debug=False):
+#==============================
+    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
+                        level=logging.DEBUG if debug else logging.INFO)
+    if debug:
+        HTTPConnection.debuglevel = 1
+        requests_log = logging.getLogger("urllib3")
+        requests_log.setLevel(logging.DEBUG)
+        requests_log.propagate = True
 
 def main():
 #==========
-    configure_log()
     args = parse_args()
+    configure_log(args.debug)
     remote_maker = RemoteMaker(args.server, args.token, args.source, args.manifest, args.commit)
     if not remote_maker.run():
         sys.exit(1)
