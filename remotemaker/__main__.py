@@ -111,8 +111,9 @@ class RemoteMaker:
         if self.__status != MakerStatus.QUEUED:
             self.__poll_time = RUNNING_POLL_TIME
         if log_data != '':
-            print(log_data.strip())
-            self.__last_log_line += len(log_data.split('\n'))
+            log_lines = log_data.strip()
+            print(log_lines)
+            self.__last_log_line += len(log_lines.split('\n'))
         if self.__status == MakerStatus.UNKNOWN:
             logging.info(f'Unknown: {str(response)}')
             raise IOError('Unexpected response')
