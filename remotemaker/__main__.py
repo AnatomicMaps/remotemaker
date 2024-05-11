@@ -32,7 +32,10 @@ import requests
 
 #===============================================================================
 
-from . import __version__
+try:
+    from . import __version__
+except ImportError:
+    from __init__ import __version__
 
 #===============================================================================
 
