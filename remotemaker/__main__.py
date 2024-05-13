@@ -45,7 +45,7 @@ LOG_ENDPOINT  = 'make/log'
 MAKE_ENDPOINT = 'make/map'
 
 QUEUED_POLL_TIME  = 10
-RUNNING_POLL_TIME = 3
+RUNNING_POLL_TIME = 1
 
 #===============================================================================
 
