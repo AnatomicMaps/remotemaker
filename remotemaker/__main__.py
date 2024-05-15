@@ -83,7 +83,6 @@ class RemoteMaker:
         if commit is not None:
             remote_map['commit'] = commit
         response = self.__request(MAKE_ENDPOINT, remote_map)
-        logging.info(f'Request: {str(response)}')
         self.__status = response['status']
         if self.__status not in INITIAL_STATUS:
             raise IOError('Unexpected initial status')
