@@ -44,8 +44,10 @@ REMOTE_TIMEOUT = (10, 30)     # (connection, read) timeout in seconds
 LOG_ENDPOINT  = 'make/log'
 MAKE_ENDPOINT = 'make/map'
 
-QUEUED_POLL_TIME  = 10
-RUNNING_POLL_TIME = 1
+QUEUED_POLL_TIME  = 20
+RUNNING_POLL_TIME =  1
+
+REQUEST_QUEUED_MSG = f'Request queued as other map(s) being made. Will retry in {QUEUED_POLL_TIME} seconds'
 
 #===============================================================================
 
@@ -88,6 +90,8 @@ class RemoteMaker:
         self.__status = response['status']
         if self.__status not in INITIAL_STATUS:
             raise IOError('Unexpected initial status')
+        elif self.__status == MakerStatus.QUEUED:
+            logging.info(REQUEST_QUEUED_MSG)
         self.__process = response['process']
         self.__last_log_line = 0
         self.__poll_time = QUEUED_POLL_TIME if response['status'] == MakerStatus.QUEUED else RUNNING_POLL_TIME
@@ -116,7 +120,9 @@ class RemoteMaker:
         response = self.__request(f'{LOG_ENDPOINT}/{self.__process}/{self.__last_log_line+1}')
         self.__status = response['status']
         log_data = response.get('log', '')
-        if self.__status != MakerStatus.QUEUED:
+        if self.__status == MakerStatus.QUEUED:
+            logging.info(REQUEST_QUEUED_MSG)
+        else:
             self.__poll_time = RUNNING_POLL_TIME
         if log_data != '':
             log_lines = log_data.strip()
