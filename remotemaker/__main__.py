@@ -24,7 +24,7 @@ import json
 import logging
 import sys
 from time import sleep
-from typing import Optional
+from typing import Any, Optional
 
 #===============================================================================
 
@@ -73,15 +73,17 @@ FINISHED_STATUS = [
 #===============================================================================
 
 class RemoteMaker:
-    def __init__(self, server: str, token: str, source: str, manifest: str, commit: Optional[str]=None):
+    def __init__(self, server: str, token: str, source: str, manifest: str, commit: Optional[str]=None, force: Optional[bool]=False):
         self.__server = server
         self.__token = token
-        remote_map = {
+        remote_map: dict[str, Any] = {
             'source': source,
             'manifest': manifest
         }
         if commit is not None:
             remote_map['commit'] = commit
+        if force:
+            remote_map['force'] = True
         response = self.__request(MAKE_ENDPOINT, remote_map)
         self.__status = response['status']
         if self.__status not in INITIAL_STATUS:
@@ -153,6 +155,8 @@ def parse_args():
                         help='The relative path of the manifest in the source repository')
     source.add_argument('--commit', metavar='GIT_COMMIT',
                         help='The branch/tag/commit to use')
+    parser.add_argument('--force', action='store_true',
+                        help='Make the map regardless of whether it already exists')
     return parser.parse_args()
 
 def configure_log(debug=False):
@@ -169,7 +173,7 @@ def main():
 #==========
     args = parse_args()
     configure_log(args.debug)
-    remote_maker = RemoteMaker(args.server, args.token, args.source, args.manifest, args.commit)
+    remote_maker = RemoteMaker(args.server, args.token, args.source, args.manifest, args.commit, args.force)
     if not remote_maker.run():
         sys.exit(1)
 
