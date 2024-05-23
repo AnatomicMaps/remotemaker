@@ -106,7 +106,7 @@ class RemoteMaker:
         headers = {
             'Authorization': f'Bearer {self.__token}'
         }
-        logging.debug(f'REQ: {server_endpoint}{f' {str(data)}' if data is not None else ''}')
+        logging.debug(f'REQ: {server_endpoint}{f" {str(data)}" if data is not None else ""}')
         retries = 0
         while retries < MAX_PROXY_RETRIES:
             if data is None:
