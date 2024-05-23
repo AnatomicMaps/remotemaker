@@ -49,6 +49,10 @@ RUNNING_POLL_TIME =  1
 
 REQUEST_QUEUED_MSG = f'Request queued as other map(s) being made. Will retry in {QUEUED_POLL_TIME} seconds'
 
+# See https://iximiuz.com/en/posts/reverse-proxy-http-keep-alive-and-502s/ with
+# comment ``Employ HTTP 5xx retries on the client-side (well, they are often a must-have anyway)``
+MAX_PROXY_RETRIES = 5
+
 #===============================================================================
 
 class MakerStatus:
@@ -102,13 +106,18 @@ class RemoteMaker:
         headers = {
             'Authorization': f'Bearer {self.__token}'
         }
-        if data is None:
-            logging.debug(f'REQ: {server_endpoint}')
-            response = requests.get(server_endpoint, headers=headers, timeout=REMOTE_TIMEOUT)
-        else:
-            logging.debug(f'REQ: {server_endpoint} {str(data)}')
-            response = requests.post(server_endpoint, headers=headers, json=data, timeout=REMOTE_TIMEOUT)
-        logging.debug(f'RSP: {response.status_code} {response.text}')
+        logging.debug(f'REQ: {server_endpoint}{f' {str(data)}' if data is not None else ''}')
+        retries = 0
+        while retries < MAX_PROXY_RETRIES:
+            if data is None:
+                response = requests.get(server_endpoint, headers=headers, timeout=REMOTE_TIMEOUT)
+            else:
+                response = requests.post(server_endpoint, headers=headers, json=data, timeout=REMOTE_TIMEOUT)
+            logging.debug(f'RSP: {response.status_code} {response.text}')
+            if response.status_code not in [502, 503, 504]:
+                break
+            sleep(0.1)
+            retries += 1
         response.raise_for_status()
         try:
             return response.json()
