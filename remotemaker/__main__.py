@@ -188,8 +188,12 @@ def main():
 #==========
     args = parse_args()
     configure_log(args.debug)
-    remote_maker = RemoteMaker(args.server, args.token, args.source, args.manifest, args.commit, args.force)
-    if not remote_maker.run():
+    try:
+        remote_maker = RemoteMaker(args.server, args.token, args.source, args.manifest, args.commit, args.force)
+        if not remote_maker.run():
+            sys.exit(1)
+    except Exception as e:
+        log.exception(str(e), exc_info=True)
         sys.exit(1)
 
 #===============================================================================
