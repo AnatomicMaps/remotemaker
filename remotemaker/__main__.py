@@ -193,7 +193,7 @@ def main():
         if not remote_maker.run():
             sys.exit(1)
     except Exception as e:
-        log.exception(str(e), exc_info=True)
+        logging.exception(str(e), exc_info=True)
         sys.exit(1)
 
 #===============================================================================
