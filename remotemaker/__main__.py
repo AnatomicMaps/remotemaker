@@ -19,6 +19,7 @@
 #===============================================================================
 
 import argparse
+from datetime import datetime
 from http.client import HTTPConnection
 import json
 import logging
@@ -106,14 +107,14 @@ class RemoteMaker:
         headers = {
             'Authorization': f'Bearer {self.__token}'
         }
-        logging.debug(f'REQ: {server_endpoint}{f" {str(data)}" if data is not None else ""}')
+        logging.debug(f'REQ: {server_endpoint}{f" {str(data)}" if data is not None else ""} at {datetime.now()}')
         retries = 0
         while retries < MAX_PROXY_RETRIES:
             if data is None:
                 response = requests.get(server_endpoint, headers=headers, timeout=REMOTE_TIMEOUT)
             else:
                 response = requests.post(server_endpoint, headers=headers, json=data, timeout=REMOTE_TIMEOUT)
-            logging.debug(f'RSP: {response.status_code} {response.text}')
+            logging.debug(f'RSP: {response.status_code} {response.text} at {datetime.now()}')
             if response.status_code not in [502, 503, 504]:
                 break
             sleep(0.1)
