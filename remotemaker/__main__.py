@@ -97,7 +97,7 @@ class RemoteMaker:
             raise IOError('Unexpected initial status')
         elif self.__status == MakerStatus.QUEUED:
             logging.info(REQUEST_QUEUED_MSG)
-        self.__process = response['process']
+        self.__process = response['id']
         self.__last_log_line = 0
         self.__poll_time = QUEUED_POLL_TIME if response['status'] == MakerStatus.QUEUED else RUNNING_POLL_TIME
 
