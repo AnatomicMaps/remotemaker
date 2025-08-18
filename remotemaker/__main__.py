@@ -177,7 +177,7 @@ class RemoteMaker:
         if self.__websocket is None:
             ws_log_endpoint = f'{self.__ws_server}/{WS_LOG_ENDPOINT}'
             try:
-                self.__websocket = websockets.sync.client.connect(ws_log_endpoint)
+                self.__websocket = websockets.sync.client.connect(ws_log_endpoint, ping_timeout=None)
             except Exception as e:
                 if self.__print_log:
                     print('WS:', str(e))
