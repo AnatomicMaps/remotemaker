@@ -103,6 +103,7 @@ class RemoteMaker:
         self.__process = None
         self.__last_log_line = 0
         self.__poll_time = QUEUED_POLL_TIME
+        self.__uuid = None
         self.__remote_map: dict[str, Any] = {
             'source': source,
             'manifest': manifest
@@ -111,6 +112,10 @@ class RemoteMaker:
             self.__remote_map['commit'] = commit
         if force:
             self.__remote_map['force'] = True
+
+    @property
+    def uuid(self):
+        return self.__uuid
 
     def __request(self, endpoint: str, data: Optional[dict]=None):
     #=============================================================
@@ -156,6 +161,8 @@ class RemoteMaker:
                 print(log_lines)
                 self.__last_log_line += len(log_lines.split('\n'))
             else:
+                if log_data.get('level') == 'critical' and log_data.get('msg', '') == 'Mapmaker succeeded':
+                    self.__uuid = log_data.get('uuid')
                 print(log_data)
         if self.__status == MakerStatus.UNKNOWN:
             logging.info(f'Unknown: {str(response)}')
@@ -246,7 +253,6 @@ class RemoteMaker:
             if self.__status != MakerStatus.QUEUED:
                 break
             sleep(QUEUED_POLL_TIME)
-        return self.__status == MakerStatus.TERMINATED
 
 #===============================================================================
 
@@ -288,8 +294,8 @@ def main():
     configure_log(args.debug)
     try:
         remote_maker = RemoteMaker(args.server, args.token, args.source, args.manifest, args.commit, args.force)
-        if not remote_maker.run():
-            sys.exit(1)
+        remote_maker.run()
+        print('Generated map:', remote_maker.uuid)
     except Exception as e:
         logging.exception(str(e), exc_info=True)
         sys.exit(1)
