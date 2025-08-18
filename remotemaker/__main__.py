@@ -26,10 +26,12 @@ import logging
 import sys
 from time import sleep
 from typing import Any, Optional
+from urllib.parse import urlparse, urlunparse
 
 #===============================================================================
 
 import requests
+import websockets.sync.client
 
 #===============================================================================
 
@@ -44,15 +46,28 @@ REMOTE_TIMEOUT = (10, 30)     # (connection, read) timeout in seconds
 
 LOG_ENDPOINT  = 'make/log'
 MAKE_ENDPOINT = 'make/map'
+WS_LOG_ENDPOINT = 'make/maker-log'
 
 QUEUED_POLL_TIME  = 20
 RUNNING_POLL_TIME =  1
+WS_RECV_POLL_TIME =  1
+WS_IDLE_POLL_TIME =  0.01
 
 REQUEST_QUEUED_MSG = f'Request queued as other map(s) being made. Will retry in {QUEUED_POLL_TIME} seconds'
 
 # See https://iximiuz.com/en/posts/reverse-proxy-http-keep-alive-and-502s/ with
 # comment ``Employ HTTP 5xx retries on the client-side (well, they are often a must-have anyway)``
 MAX_REQUEST_RETRIES = 5
+
+#===============================================================================
+
+def ws_server(server: str) -> str:
+#=================================
+    parts = urlparse(server)
+    if parts.scheme == 'https':
+        return urlunparse(parts._replace(scheme='wss'))
+    else:
+        return urlunparse(parts._replace(scheme='ws'))
 
 #===============================================================================
 
@@ -82,6 +97,8 @@ FINISHED_STATUS = [
 class RemoteMaker:
     def __init__(self, server: str, token: str, source: str, manifest: str, commit: Optional[str]=None, force: Optional[bool]=False):
         self.__server = server
+        self.__ws_server = ws_server(server)
+        self.__websocket = None
         self.__token = token
         remote_map: dict[str, Any] = {
             'source': source,
@@ -131,30 +148,94 @@ class RemoteMaker:
         except json.JSONDecodeError:
             raise TypeError(f'Invalid JSON returned from server: {response.text}')
 
-    def __check_and_print_log(self):
-    #===============================
-        response = self.__request(f'{LOG_ENDPOINT}/{self.__process}/{self.__last_log_line+1}')
+    def __check_and_print_log(self, response: dict):
+    #===============================================
         self.__status = response['status']
         log_data = response.get('log', '')
         if self.__status == MakerStatus.QUEUED:
             logging.info(REQUEST_QUEUED_MSG)
-        else:
+        elif self.__websocket is None:
             self.__poll_time = RUNNING_POLL_TIME
         if log_data != '':
-            log_lines = log_data.strip()
-            print(log_lines)
-            self.__last_log_line += len(log_lines.split('\n'))
+            if self.__websocket is None:
+                log_lines = log_data.strip()
+                print(log_lines)
+                self.__last_log_line += len(log_lines.split('\n'))
+            else:
+                print(log_data)
         if self.__status == MakerStatus.UNKNOWN:
             logging.info(f'Unknown: {str(response)}')
             raise IOError('Unexpected response')
 
+    def __check_websockets(self):
+    #============================
+        if self.__websocket is None:
+            ws_log_endpoint = f'{self.__ws_server}/{WS_LOG_ENDPOINT}'
+            try:
+                self.__websocket = websockets.sync.client.connect(ws_log_endpoint)
+            except Exception as e:
+                print('WS:', str(e))
+
+    def __close_websocket(self):
+    #===========================
+        if self.__websocket is not None:
+            self.__websocket.close()
+            self.__websocket = None
+
+    def __receive_json(self, timeout=WS_RECV_POLL_TIME):
+    #===================================================
+        if self.__websocket is not None:
+            try:
+                data = self.__websocket.recv(timeout=timeout)
+                return json.loads(data)
+            except websockets.exceptions.ConnectionClosedOK:
+                self.__websocket = None
+            except TimeoutError:
+                pass
+
+    def __send_json(self, data):
+    #========================
+        if self.__websocket is not None:
+            self.__websocket.send(json.dumps(data))
+
+    def __poll_for_status_and_log(self):
+    #===================================
+        self.__check_websockets()
+        if self.__websocket is None:
+            while self.__status not in FINISHED_STATUS:
+                response = self.__request(f'{LOG_ENDPOINT}/{self.__process}/{self.__last_log_line+1}')
+                self.__check_and_print_log(response)
+                sleep(self.__poll_time)
+            # Delete process record on server
+            self.__request(f'{LOG_ENDPOINT}/{self.__process}/{self.__last_log_line+1}')
+        else:
+            response = self.__receive_json()
+            if response is None or response.get('status') != 'connected':
+                self.__close_websocket()
+                return
+            self.__send_json({
+                'type': 'status',
+                'id': self.__process
+            })
+            self.__poll_time = WS_IDLE_POLL_TIME
+            while self.__status not in FINISHED_STATUS:
+                response = self.__receive_json(timeout=0)
+                if response is not None:
+                    self.__check_and_print_log(response)
+                    if self.__status == MakerStatus.QUEUED:
+                        self.__close_websocket()
+                        return
+                elif self.__websocket is None:
+                    return          # Connection has been closed
+                sleep(self.__poll_time)
+
     def run(self):
     #=============
-        while self.__status not in FINISHED_STATUS:
-            self.__check_and_print_log()
+        while True:
+            self.__poll_for_status_and_log()
+            if self.__status != MakerStatus.QUEUED:
+                break
             sleep(self.__poll_time)
-        # Delete process record on server
-        self.__request(f'{LOG_ENDPOINT}/{self.__process}/{self.__last_log_line+1}')
         return self.__status == MakerStatus.TERMINATED
 
 #===============================================================================
