@@ -2,7 +2,7 @@
 #
 #  Remote flatmap maker
 #
-#  Copyright (c) 2024  David Brooks
+#  Copyright (c) 2024 - 2025 David Brooks
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -19,246 +19,16 @@
 #===============================================================================
 
 import argparse
-from datetime import datetime
 from http.client import HTTPConnection
-import json
 import logging
 import sys
-from time import sleep
-from typing import Any, Optional
-from urllib.parse import urlparse, urlunparse
-
-#===============================================================================
-
-import requests
-import websockets.sync.client
 
 #===============================================================================
 
 try:
-    from . import __version__
+    from . import __version__, RemoteMaker
 except ImportError:
-    from __init__ import __version__
-
-#===============================================================================
-
-REMOTE_TIMEOUT = (10, 30)     # (connection, read) timeout in seconds
-
-LOG_ENDPOINT  = 'make/log'
-MAKE_ENDPOINT = 'make/map'
-WS_LOG_ENDPOINT = 'make/maker-log'
-
-QUEUED_POLL_TIME  = 20
-RUNNING_POLL_TIME =  1
-WS_RECV_POLL_TIME =  1
-WS_IDLE_POLL_TIME =  0.01
-
-REQUEST_QUEUED_MSG = f'Request queued as other map(s) being made. Will retry in {QUEUED_POLL_TIME} seconds'
-
-# See https://iximiuz.com/en/posts/reverse-proxy-http-keep-alive-and-502s/ with
-# comment ``Employ HTTP 5xx retries on the client-side (well, they are often a must-have anyway)``
-MAX_REQUEST_RETRIES = 5
-
-#===============================================================================
-
-def ws_server(server: str) -> str:
-#=================================
-    parts = urlparse(server)
-    if parts.scheme == 'https':
-        return urlunparse(parts._replace(scheme='wss'))
-    else:
-        return urlunparse(parts._replace(scheme='ws'))
-
-#===============================================================================
-
-class MakerStatus:
-    QUEUED = 'queued'
-    RUNNING = 'running'
-    TERMINATED = 'terminated'
-    ABORTED = 'aborted'
-    UNKNOWN = 'unknown'
-
-INITIAL_STATUS = [
-    MakerStatus.QUEUED,
-    MakerStatus.RUNNING
-]
-
-RUNNING_STATUS = [
-    MakerStatus.RUNNING
-]
-
-FINISHED_STATUS = [
-    MakerStatus.TERMINATED,
-    MakerStatus.ABORTED
-]
-
-#===============================================================================
-
-class RemoteMaker:
-    def __init__(self, server: str, token: str, source: str, manifest: str, commit: Optional[str]=None, force: Optional[bool]=False):
-        self.__server = server
-        self.__ws_server = ws_server(server)
-        self.__websocket = None
-        self.__token = token
-        self.__process = None
-        self.__last_log_line = 0
-        self.__poll_time = QUEUED_POLL_TIME
-        self.__uuid = None
-        self.__print_log = False
-
-        self.__remote_map: dict[str, Any] = {
-            'source': source,
-            'manifest': manifest
-        }
-        if commit is not None:
-            self.__remote_map['commit'] = commit
-        if force:
-            self.__remote_map['force'] = True
-
-    @property
-    def uuid(self):
-        return self.__uuid
-
-    def __request(self, endpoint: str, data: Optional[dict]=None):
-    #=============================================================
-        server_endpoint = f'{self.__server}/{endpoint}'
-        headers = {
-            'Authorization': f'Bearer {self.__token}'
-        }
-        logging.debug(f'REQ: {server_endpoint}{f" {str(data)}" if data is not None else ""} at {datetime.now()}')
-        retries = 0
-        response = None
-        while retries < MAX_REQUEST_RETRIES:
-            try:
-                if data is None:
-                    response = requests.get(server_endpoint, headers=headers, timeout=REMOTE_TIMEOUT)
-                else:
-                    response = requests.post(server_endpoint, headers=headers, json=data, timeout=REMOTE_TIMEOUT)
-            except (requests.ConnectTimeout, requests.ReadTimeout):
-                continue
-            logging.debug(f'RSP: {response.status_code} {response.text} at {datetime.now()}')
-            if response.status_code not in [502, 503, 504]:
-                break
-            sleep(0.1)
-            retries += 1
-        if response is None:
-            raise IOError(f'Timed out: No response from {server_endpoint} after {MAX_REQUEST_RETRIES} retries')
-        response.raise_for_status()
-        try:
-            return response.json()
-        except json.JSONDecodeError:
-            raise TypeError(f'Invalid JSON returned from server: {response.text}')
-
-    def __check_and_print_log(self, response: dict):
-    #===============================================
-        self.__status = response['status']
-        log_data = response.get('log', '')
-        if self.__status == MakerStatus.QUEUED:
-            logging.info(REQUEST_QUEUED_MSG)
-        elif self.__websocket is None:
-            self.__poll_time = RUNNING_POLL_TIME
-        if log_data != '':
-            if self.__websocket is None:
-                log_lines = log_data.strip()
-                if self.__print_log:
-                    print(log_lines)
-                self.__last_log_line += len(log_lines.split('\n'))
-            else:
-                if log_data.get('level') == 'critical' and log_data.get('msg', '') == 'Mapmaker succeeded':
-                    self.__uuid = log_data.get('uuid')
-                if self.__print_log:
-                    print(log_data)
-        if self.__status == MakerStatus.UNKNOWN:
-            logging.info(f'Unknown: {str(response)}')
-            raise IOError('Unexpected response')
-
-    def __check_websockets(self):
-    #============================
-        if self.__websocket is None:
-            ws_log_endpoint = f'{self.__ws_server}/{WS_LOG_ENDPOINT}'
-            try:
-                self.__websocket = websockets.sync.client.connect(ws_log_endpoint, ping_timeout=None)
-            except Exception as e:
-                if self.__print_log:
-                    print('WS:', str(e))
-
-    def __close_websocket(self):
-    #===========================
-        if self.__websocket is not None:
-            self.__websocket.close()
-            self.__websocket = None
-
-    def __receive_json(self, timeout=WS_RECV_POLL_TIME):
-    #===================================================
-        if self.__websocket is not None:
-            try:
-                data = self.__websocket.recv(timeout=timeout)
-                return json.loads(data)
-            except websockets.exceptions.ConnectionClosedOK:
-                self.__websocket = None
-            except TimeoutError:
-                pass
-
-    def __send_json(self, data):
-    #========================
-        if self.__websocket is not None:
-            self.__websocket.send(json.dumps(data))
-
-    def __poll_for_status_and_log(self):
-    #===================================
-        self.__check_websockets()
-        if self.__websocket is None:
-            while self.__status not in FINISHED_STATUS:
-                response = self.__request(f'{LOG_ENDPOINT}/{self.__process}/{self.__last_log_line+1}')
-                self.__check_and_print_log(response)
-                sleep(self.__poll_time)
-            # Delete process record on server
-            self.__request(f'{LOG_ENDPOINT}/{self.__process}/{self.__last_log_line+1}')
-        else:
-            response = self.__receive_json()
-            if response is None or response.get('status') != 'connected':
-                self.__close_websocket()
-                return
-            self.__send_json({
-                'type': 'status',
-                'id': self.__process
-            })
-            self.__poll_time = WS_IDLE_POLL_TIME
-            while self.__status not in FINISHED_STATUS:
-                response = self.__receive_json(timeout=0)
-                if response is not None:
-                    self.__check_and_print_log(response)
-                    if self.__status == MakerStatus.QUEUED:
-                        self.__close_websocket()
-                        return
-                elif self.__websocket is None:
-                    return          # Connection has been closed
-                sleep(self.__poll_time)
-
-    def __connect(self) -> bool:
-    #===========================
-        response = self.__request(MAKE_ENDPOINT, self.__remote_map)
-        self.__status = response['status']
-        if self.__status not in INITIAL_STATUS:
-            raise IOError('Unexpected initial status')
-        elif self.__status == MakerStatus.QUEUED:
-            logging.info(REQUEST_QUEUED_MSG)
-            return False
-        self.__process = response['id']
-        self.__last_log_line = 0
-        return True
-
-    def run(self, print_log=False):
-    #==============================
-        self.__print_log = print_log
-        while not self.__connect():
-            sleep(QUEUED_POLL_TIME)
-        self.__poll_time = RUNNING_POLL_TIME
-        while True:
-            self.__poll_for_status_and_log()
-            if self.__status != MakerStatus.QUEUED:
-                break
-            sleep(QUEUED_POLL_TIME)
+    from __init__ import __version__, RemoteMaker
 
 #===============================================================================
 
@@ -313,4 +83,5 @@ def main():
 if __name__ == '__main__':
     main()
 
+#===============================================================================
 #===============================================================================
