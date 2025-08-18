@@ -1,9 +1,20 @@
-[tool.poetry]
+[project]
 name = "remotemaker"
 version = "0.1.10"
-description = ""
-authors = ["David Brooks <d.brooks@auckland.ac.nz>"]
+description = "Remotely run mapmaker"
+authors = [
+    { name = "David Brooks", email = "d.brooks@auckland.ac.nz"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "requests>=2.32.0",
+    "websockets>=15.0.1",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.10,<4.0"
-requests = "^2.31.0"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
