@@ -100,23 +100,17 @@ class RemoteMaker:
         self.__ws_server = ws_server(server)
         self.__websocket = None
         self.__token = token
-        remote_map: dict[str, Any] = {
+        self.__process = None
+        self.__last_log_line = 0
+        self.__poll_time = QUEUED_POLL_TIME
+        self.__remote_map: dict[str, Any] = {
             'source': source,
             'manifest': manifest
         }
         if commit is not None:
-            remote_map['commit'] = commit
+            self.__remote_map['commit'] = commit
         if force:
-            remote_map['force'] = True
-        response = self.__request(MAKE_ENDPOINT, remote_map)
-        self.__status = response['status']
-        if self.__status not in INITIAL_STATUS:
-            raise IOError('Unexpected initial status')
-        elif self.__status == MakerStatus.QUEUED:
-            logging.info(REQUEST_QUEUED_MSG)
-        self.__process = response['id']
-        self.__last_log_line = 0
-        self.__poll_time = QUEUED_POLL_TIME if response['status'] == MakerStatus.QUEUED else RUNNING_POLL_TIME
+            self.__remote_map['force'] = True
 
     def __request(self, endpoint: str, data: Optional[dict]=None):
     #=============================================================
@@ -229,13 +223,29 @@ class RemoteMaker:
                     return          # Connection has been closed
                 sleep(self.__poll_time)
 
+    def __connect(self) -> bool:
+    #===========================
+        response = self.__request(MAKE_ENDPOINT, self.__remote_map)
+        self.__status = response['status']
+        if self.__status not in INITIAL_STATUS:
+            raise IOError('Unexpected initial status')
+        elif self.__status == MakerStatus.QUEUED:
+            logging.info(REQUEST_QUEUED_MSG)
+            return False
+        self.__process = response['id']
+        self.__last_log_line = 0
+        return True
+
     def run(self):
     #=============
+        while not self.__connect():
+            sleep(QUEUED_POLL_TIME)
+        self.__poll_time = RUNNING_POLL_TIME
         while True:
             self.__poll_for_status_and_log()
             if self.__status != MakerStatus.QUEUED:
                 break
-            sleep(self.__poll_time)
+            sleep(QUEUED_POLL_TIME)
         return self.__status == MakerStatus.TERMINATED
 
 #===============================================================================
