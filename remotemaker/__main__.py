@@ -104,6 +104,8 @@ class RemoteMaker:
         self.__last_log_line = 0
         self.__poll_time = QUEUED_POLL_TIME
         self.__uuid = None
+        self.__print_log = False
+
         self.__remote_map: dict[str, Any] = {
             'source': source,
             'manifest': manifest
@@ -158,12 +160,14 @@ class RemoteMaker:
         if log_data != '':
             if self.__websocket is None:
                 log_lines = log_data.strip()
-                print(log_lines)
+                if self.__print_log:
+                    print(log_lines)
                 self.__last_log_line += len(log_lines.split('\n'))
             else:
                 if log_data.get('level') == 'critical' and log_data.get('msg', '') == 'Mapmaker succeeded':
                     self.__uuid = log_data.get('uuid')
-                print(log_data)
+                if self.__print_log:
+                    print(log_data)
         if self.__status == MakerStatus.UNKNOWN:
             logging.info(f'Unknown: {str(response)}')
             raise IOError('Unexpected response')
@@ -175,7 +179,8 @@ class RemoteMaker:
             try:
                 self.__websocket = websockets.sync.client.connect(ws_log_endpoint)
             except Exception as e:
-                print('WS:', str(e))
+                if self.__print_log:
+                    print('WS:', str(e))
 
     def __close_websocket(self):
     #===========================
@@ -243,8 +248,9 @@ class RemoteMaker:
         self.__last_log_line = 0
         return True
 
-    def run(self):
-    #=============
+    def run(self, print_log=False):
+    #==============================
+        self.__print_log = print_log
         while not self.__connect():
             sleep(QUEUED_POLL_TIME)
         self.__poll_time = RUNNING_POLL_TIME
@@ -262,6 +268,8 @@ def parse_args():
     parser.add_argument('-v', '--version', action='version', version=__version__)
     parser.add_argument('--debug', action='store_true',
                         help='Trace requests to remote server')
+    parser.add_argument('-q', '--quiet', action='store_true',
+                        help="Don't print log messages from maker process")
     server = parser.add_argument_group('Remote server')
     server.add_argument('--server', required=True,
                         help='The URL of flatmap server')
@@ -294,7 +302,7 @@ def main():
     configure_log(args.debug)
     try:
         remote_maker = RemoteMaker(args.server, args.token, args.source, args.manifest, args.commit, args.force)
-        remote_maker.run()
+        remote_maker.run(print_log=not args.quiet)
         print('Generated map:', remote_maker.uuid)
     except Exception as e:
         logging.exception(str(e), exc_info=True)
