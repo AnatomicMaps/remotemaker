@@ -144,6 +144,13 @@ class RemoteMaker:
         except json.JSONDecodeError:
             raise TypeError(f'Invalid JSON returned from server: {response.text}')
 
+    def __check_and_print_log_line(self, log_data: dict):
+    #====================================================
+        if log_data.get('level') == 'critical' and log_data.get('msg', '') == 'Mapmaker succeeded':
+            self.__uuid = log_data.get('uuid')
+        if self.__print_log:
+            print(log_data)
+
     def __check_and_print_log(self, response: dict):
     #===============================================
         self.__status = response['status']
@@ -154,18 +161,14 @@ class RemoteMaker:
             self.__poll_time = RUNNING_POLL_TIME
         if log_data != '':
             if self.__websocket is None:
-                log_lines = log_data.strip()
-                if self.__print_log:
-                    print(log_lines)
-                self.__last_log_line += len(log_lines.split('\n'))
+                log_lines = log_data.strip().split('\n')
+                for line in log_lines:
+                    self.__check_and_print_log_line(json.loads(line))
+                self.__last_log_line += len(log_lines)
             else:
-                if log_data.get('level') == 'critical' and log_data.get('msg', '') == 'Mapmaker succeeded':
-                    self.__uuid = log_data.get('uuid')
-                if self.__print_log:
-                    print(log_data)             ## We could format log_data to look like logger output...
+                self.__check_and_print_log_line(log_data)
         if self.__status == MakerStatus.UNKNOWN:
-            logging.info(f'Unknown: {str(response)}')
-            raise IOError('Unexpected response')
+            raise IOError(f'Unexpected response: {str(response)}')
 
     def __check_websockets(self):
     #============================
@@ -207,8 +210,6 @@ class RemoteMaker:
                 response = self.__request(f'{LOG_ENDPOINT}/{self.__process}/{self.__last_log_line+1}')
                 self.__check_and_print_log(response)
                 sleep(self.__poll_time)
-            # Delete process record on server
-            self.__request(f'{LOG_ENDPOINT}/{self.__process}/{self.__last_log_line+1}')
         else:
             response = self.__receive_json()
             if response is None or response.get('status') != 'connected':
