@@ -96,7 +96,6 @@ class RemoteMaker:
         self.__websocket = None
         self.__token = token
         self.__process = None
-        self.__last_log_line = 0
         self.__poll_time = QUEUED_POLL_TIME
         self.__uuid = None
         self.__print_log = False
@@ -164,7 +163,6 @@ class RemoteMaker:
                 log_lines = log_data.strip().split('\n')
                 for line in log_lines:
                     self.__check_and_print_log_line(json.loads(line))
-                self.__last_log_line += len(log_lines)
             else:
                 self.__check_and_print_log_line(log_data)
         if self.__status == MakerStatus.UNKNOWN:
@@ -207,7 +205,7 @@ class RemoteMaker:
         self.__check_websockets()
         if self.__websocket is None:
             while self.__status not in FINISHED_STATUS:
-                response = self.__request(f'{LOG_ENDPOINT}/{self.__process}/{self.__last_log_line+1}')
+                response = self.__request(f'{LOG_ENDPOINT}/{self.__process}')
                 self.__check_and_print_log(response)
                 sleep(self.__poll_time)
         else:
@@ -241,7 +239,6 @@ class RemoteMaker:
             logging.info(REQUEST_QUEUED_MSG)
             return False
         self.__process = response['id']
-        self.__last_log_line = 0
         return True
 
     def run(self, print_log=False):
