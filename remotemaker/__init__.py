@@ -145,7 +145,7 @@ class RemoteMaker:
 
     def __check_and_print_log_line(self, log_data: dict):
     #====================================================
-        if log_data.get('level') == 'critical' and log_data.get('msg', '') == 'Mapmaker succeeded':
+        if log_data.get('level') == 'critical' and log_data.get('event', '') == 'Mapmaker succeeded':
             self.__uuid = log_data.get('uuid')
         if self.__print_log:
             print(log_data)
