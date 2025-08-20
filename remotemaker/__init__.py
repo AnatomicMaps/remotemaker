@@ -170,6 +170,8 @@ class RemoteMaker:
 
     def __check_websockets(self):
     #============================
+        return
+    '''
         if self.__websocket is None:
             ws_log_endpoint = f'{self.__ws_server}/{WS_LOG_ENDPOINT}'
             try:
@@ -177,6 +179,7 @@ class RemoteMaker:
             except Exception as e:
                 if self.__print_log:
                     print('WS:', str(e))
+    '''
 
     def __close_websocket(self):
     #===========================
