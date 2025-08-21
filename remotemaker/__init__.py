@@ -93,7 +93,6 @@ class RemoteMaker:
         self.__websocket = None
         self.__token = token
         self.__process = None
-        self.__poll_time = QUEUED_POLL_TIME
         self.__uuid = None
         self.__print_log = False
 
@@ -147,14 +146,12 @@ class RemoteMaker:
         if self.__print_log:
             print(log_data)
 
-    def __check_and_print_log(self, response: dict):
-    #===============================================
+    def __check_and_print_log(self, response: dict) -> bool:
+    #=======================================================
         self.__status = response['status']
         log_data = response.get('log', '')
         if self.__status == MakerStatus.QUEUED:
-            logging.info(REQUEST_QUEUED_MSG)
-        elif self.__websocket is None:
-            self.__poll_time = RUNNING_POLL_TIME
+            return False
         if log_data != '':
             if self.__websocket is None:
                 log_lines = log_data.strip().split('\n')
@@ -164,6 +161,7 @@ class RemoteMaker:
                 self.__check_and_print_log_line(log_data)
         if self.__status == MakerStatus.UNKNOWN:
             raise IOError(f'Unexpected response: {str(response)}')
+        return True
 
     def __check_websockets(self):
     #============================
@@ -184,8 +182,8 @@ class RemoteMaker:
             self.__websocket.close()
             self.__websocket = None
 
-    def __receive_json(self, timeout=WS_RECV_POLL_TIME):
-    #===================================================
+    def __receive_json(self, timeout: float):
+    #========================================
         if self.__websocket is not None:
             try:
                 data = self.__websocket.recv(timeout=timeout)
@@ -206,10 +204,11 @@ class RemoteMaker:
         if self.__websocket is None:
             while self.__status not in FINISHED_STATUS:
                 response = self.__request(f'{LOG_ENDPOINT}/{self.__process}')
-                self.__check_and_print_log(response)
-                sleep(self.__poll_time)
+                if not self.__check_and_print_log(response):
+                    return
+                sleep(RUNNING_POLL_TIME)
         else:
-            response = self.__receive_json()
+            response = self.__receive_json(WS_RECV_POLL_TIME)
             if response is None or response.get('status') != 'connected':
                 self.__close_websocket()
                 return
@@ -217,17 +216,15 @@ class RemoteMaker:
                 'type': 'status',
                 'id': self.__process
             })
-            self.__poll_time = WS_IDLE_POLL_TIME
             while self.__status not in FINISHED_STATUS:
-                response = self.__receive_json(timeout=0)
+                response = self.__receive_json(0)
                 if response is not None:
-                    self.__check_and_print_log(response)
-                    if self.__status == MakerStatus.QUEUED:
+                    if not self.__check_and_print_log(response):
                         self.__close_websocket()
                         return
                 elif self.__websocket is None:
                     return          # Connection has been closed
-                sleep(self.__poll_time)
+                sleep(WS_IDLE_POLL_TIME)
 
     def __connect(self) -> bool:
     #===========================
