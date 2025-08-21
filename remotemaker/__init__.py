@@ -43,7 +43,7 @@ LOG_ENDPOINT  = 'make/log'
 MAKE_ENDPOINT = 'make/map'
 WS_LOG_ENDPOINT = 'make/maker-log'
 
-RUNNING_POLL_TIME =  1
+RUNNING_POLL_TIME =  0.5
 WS_RECV_POLL_TIME =  1
 WS_IDLE_POLL_TIME =  0.01
 
