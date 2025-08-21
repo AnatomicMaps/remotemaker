@@ -22,9 +22,7 @@ __version__ = '0.2.1'
 
 #===============================================================================
 
-from datetime import datetime
 import json
-import logging
 from time import sleep
 from typing import Any, Optional
 from urllib.parse import urlparse, urlunparse
@@ -35,6 +33,9 @@ import requests
 import websockets.sync.client
 
 #===============================================================================
+
+from .utils import configure_log, logger, print_log
+
 #===============================================================================
 
 REMOTE_TIMEOUT = (10, 30)     # (connection, read) timeout in seconds
@@ -87,7 +88,10 @@ FINISHED_STATUS = [
 #===============================================================================
 
 class RemoteMaker:
-    def __init__(self, server: str, token: str, source: str, manifest: str, commit: Optional[str]=None, force: Optional[bool]=False):
+    def __init__(self, server: str, token: str, source: str, manifest: str,
+                 commit: Optional[str]=None, force: bool=False,
+                 debug: bool=False):
+        configure_log(debug)
         self.__server = server
         self.__ws_server = ws_server(server)
         self.__websocket = None
@@ -115,7 +119,7 @@ class RemoteMaker:
         headers = {
             'Authorization': f'Bearer {self.__token}'
         }
-        logging.debug(f'REQ: {server_endpoint}{f" {str(data)}" if data is not None else ""} at {datetime.now()}')
+        logger.debug(f'REQ: {server_endpoint}{f" {str(data)}" if data is not None else ""}')
         retries = 0
         response = None
         while retries < MAX_REQUEST_RETRIES:
@@ -126,7 +130,7 @@ class RemoteMaker:
                     response = requests.post(server_endpoint, headers=headers, json=data, timeout=REMOTE_TIMEOUT)
             except (requests.ConnectTimeout, requests.ReadTimeout):
                 continue
-            logging.debug(f'RSP: {response.status_code} {response.text} at {datetime.now()}')
+            logger.debug(f'RSP: {response.status_code} {response.text}')
             if response.status_code not in [502, 503, 504]:
                 break
             sleep(0.1)
@@ -141,10 +145,13 @@ class RemoteMaker:
 
     def __check_and_print_log_line(self, log_data: dict):
     #====================================================
-        if log_data.get('level') == 'critical' and log_data.get('msg', '') == 'Mapmaker succeeded':
-            self.__uuid = log_data.get('uuid')
-        if self.__print_log:
-            print(log_data)
+        msg = log_data.pop('msg', '')
+        if log_data.get('level') == 'critical':
+            if  msg == 'Mapmaker succeeded':
+                self.__uuid = log_data.get('uuid')
+            print_log(msg, log_data)
+        elif self.__print_log:
+            print_log(msg, log_data)
 
     def __check_and_print_log(self, response: dict) -> bool:
     #=======================================================

@@ -19,13 +19,13 @@
 #===============================================================================
 
 import argparse
-from http.client import HTTPConnection
-import logging
 import sys
+from time import sleep
 
 #===============================================================================
 
 from remotemaker import __version__, RemoteMaker
+from remotemaker.utils import logger
 
 #===============================================================================
 
@@ -58,28 +58,17 @@ def parse_args():
                         help='Make the map regardless of whether it already exists')
     return parser.parse_args()
 
-def configure_log(debug=False):
-#==============================
-    logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s',
-                        level=logging.DEBUG if debug else logging.INFO)
-    if debug:
-        HTTPConnection.debuglevel = 1
-        requests_log = logging.getLogger("urllib3")
-        requests_log.setLevel(logging.DEBUG)
-        requests_log.propagate = True
-
 def main():
 #==========
     args = parse_args()
-    configure_log(args.debug)
     try:
-        remote_maker = RemoteMaker(args.server, args.token, args.source, args.manifest, args.commit, args.force)
-        print('Generated map:', remote_maker.uuid)
+        remote_maker = RemoteMaker(args.server, args.token, args.source, args.manifest,
+                                   args.commit, args.force, args.debug)
         while not remote_maker.run(print_log=not args.quiet):
-            logging.info(REQUEST_QUEUED_MSG)
+            logger.info(REQUEST_QUEUED_MSG)
             sleep(REQUEST_REPLY_TIME)
     except Exception as e:
-        logging.exception(str(e), exc_info=True)
+        logger.exception(str(e), exc_info=True)
         sys.exit(1)
 
 #===============================================================================
