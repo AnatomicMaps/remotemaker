@@ -25,10 +25,7 @@ import sys
 
 #===============================================================================
 
-try:
-    from . import __version__, RemoteMaker
-except ImportError:
-    from __init__ import __version__, RemoteMaker
+from remotemaker import __version__, RemoteMaker
 
 #===============================================================================
 
