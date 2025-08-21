@@ -32,6 +32,11 @@ except ImportError:
 
 #===============================================================================
 
+REQUEST_REPLY_TIME  = 20
+REQUEST_QUEUED_MSG = f'Request denied as other map(s) being made. Will retry in {REQUEST_REPLY_TIME} seconds.'
+
+#===============================================================================
+
 def parse_args():
 #================
     parser = argparse.ArgumentParser(description='Make a flatmap on a remote map server.')
@@ -72,8 +77,10 @@ def main():
     configure_log(args.debug)
     try:
         remote_maker = RemoteMaker(args.server, args.token, args.source, args.manifest, args.commit, args.force)
-        remote_maker.run(print_log=not args.quiet)
         print('Generated map:', remote_maker.uuid)
+        while not remote_maker.run(print_log=not args.quiet):
+            logging.info(REQUEST_QUEUED_MSG)
+            sleep(REQUEST_REPLY_TIME)
     except Exception as e:
         logging.exception(str(e), exc_info=True)
         sys.exit(1)

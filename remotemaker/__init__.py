@@ -43,12 +43,9 @@ LOG_ENDPOINT  = 'make/log'
 MAKE_ENDPOINT = 'make/map'
 WS_LOG_ENDPOINT = 'make/maker-log'
 
-QUEUED_POLL_TIME  = 20
 RUNNING_POLL_TIME =  1
 WS_RECV_POLL_TIME =  1
 WS_IDLE_POLL_TIME =  0.01
-
-REQUEST_QUEUED_MSG = f'Request queued as other map(s) being made. Will retry in {QUEUED_POLL_TIME} seconds'
 
 # See https://iximiuz.com/en/posts/reverse-proxy-http-keep-alive-and-502s/ with
 # comment ``Employ HTTP 5xx retries on the client-side (well, they are often a must-have anyway)``
@@ -239,22 +236,17 @@ class RemoteMaker:
         if self.__status not in INITIAL_STATUS:
             raise IOError('Unexpected initial status')
         elif self.__status == MakerStatus.QUEUED:
-            logging.info(REQUEST_QUEUED_MSG)
             return False
         self.__process = response['id']
         return True
 
-    def run(self, print_log=False):
-    #==============================
+    def run(self, print_log=False) -> bool:
+    #======================================
         self.__print_log = print_log
-        while not self.__connect():
-            sleep(QUEUED_POLL_TIME)
-        self.__poll_time = RUNNING_POLL_TIME
-        while True:
+        if self.__connect():
             self.__poll_for_status_and_log()
-            if self.__status != MakerStatus.QUEUED:
-                break
-            sleep(QUEUED_POLL_TIME)
+            return True
+        return False
 
 #===============================================================================
 #===============================================================================
