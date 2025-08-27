@@ -4,15 +4,29 @@ A Python tool to remotely run [mapmaker](https://github.com/AnatomicMaps/flatmap
 
 ## Installation
 
+### Local system
+
+Install the latest released wheel in a Python 3.12 environment, for instance with [uv](https://docs.astral.sh/uv/):
+
+
+```
+$ uv add https://github.com/AnatomicMaps/remotemaker/releases/download/v0.3.1/remotemaker-0.3.1-py3-none-any.whl
+```
 
 ### GitHub workflow
 
--   install Python
+-   install Python 3.12
 -   install uv
--   checkout remotemaker repo.
+-   checkout remotemaker repo
 -   ...
 
 ## Running
+
+First make sure the Python environment into which `remotemaker` has been installed is active.
+
+```
+$ remotemaker --help
+```
 
 ### Parameters
 

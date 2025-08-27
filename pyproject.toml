@@ -1,6 +1,6 @@
 [project]
 name = "remotemaker"
-version = "0.3.0"
+version = "0.3.1"
 description = "Remotely run mapmaker"
 authors = [
     { name = "David Brooks", email = "d.brooks@auckland.ac.nz"}
@@ -12,6 +12,9 @@ dependencies = [
     "structlog>=25.4.0",
     "websockets>=15.0.1",
 ]
+
+[project.scripts]
+remotemaker = 'remotemaker.__main__:main'
 
 [build-system]
 requires = ["hatchling"]
