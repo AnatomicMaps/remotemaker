@@ -6,7 +6,7 @@ A Python tool to remotely run [mapmaker](https://github.com/AnatomicMaps/flatmap
 
 ### Local system
 
-Install the latest released wheel in a Python 3.12 environment, for instance with [uv](https://docs.astral.sh/uv/):
+Install the [latest released wheel](https://github.com/AnatomicMaps/remotemaker/releases) in a Python 3.12 environment, for instance with [uv](https://docs.astral.sh/uv/):
 
 
 ```
