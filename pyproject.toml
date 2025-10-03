@@ -1,6 +1,6 @@
 [project]
 name = "remotemaker"
-version = "0.3.1"
+version = "0.3.2"
 description = "Remotely run mapmaker"
 authors = [
     { name = "David Brooks", email = "d.brooks@auckland.ac.nz"}
